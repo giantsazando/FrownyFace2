@@ -1,0 +1,955 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Castle Dracula</title>
+<meta name="description" content="Converse with Count Dracula, voiced by a small language model that runs entirely in your browser.">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0b0708">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='29' fill='%238e1b22' stroke='%23c9a45c' stroke-width='4'/%3E%3Ctext x='32' y='44' font-family='Georgia,serif' font-size='33' font-weight='700' text-anchor='middle' fill='%23f3e9d8'%3ED%3C/text%3E%3C/svg%3E">
+<!-- Link previews. og:url / og:image assume the default GitHub Pages address; change them if you use a custom domain. -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="Castle Dracula">
+<meta property="og:description" content="Talk with Count Dracula. A small AI model voices him, running entirely in your browser.">
+<meta property="og:url" content="https://giantsazando.github.io/FrownyFace2/">
+<meta property="og:image" content="https://giantsazando.github.io/FrownyFace2/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Castle Dracula: a moonlit castle silhouette above a chat window with Count Dracula.">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- crossorigin: when the page is cross-origin isolated (see coi-sw.js), cross-origin styles must load with CORS. -->
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=IM+Fell+English:ital@0;1&display=swap" rel="stylesheet" crossorigin="anonymous">
+<style>
+  :root {
+    --bg: #0b0708;
+    --bg-raise: #140c0e;
+    --panel: #1a1013;
+    --panel-edge: #2c1a1e;
+    --ink: #eadcc4;
+    --ink-dim: #a99780;
+    --ink-faint: #75665a;
+    --blood: #8e1b22;
+    --blood-bright: #c4313b;
+    --blood-deep: #4a0c11;
+    --gold: #c9a45c;
+    --gold-dim: rgba(201, 164, 92, 0.28);
+    --moon: #f3ead6;
+    --serif: "IM Fell English", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --caps: "Cinzel", "Trajan Pro", "Times New Roman", serif;
+    --radius: 14px;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    min-height: 100dvh;
+    background:
+      radial-gradient(ellipse 60% 40% at 50% -5%, rgba(142, 27, 34, 0.22), transparent 70%),
+      radial-gradient(ellipse 120% 80% at 50% 120%, #000 30%, transparent 70%),
+      var(--bg);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 17px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------- Night sky ---------- */
+  .sky { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+  .moon {
+    position: absolute; top: 34px; right: max(6vw, 24px);
+    width: 92px; height: 92px; border-radius: 50%;
+    background: radial-gradient(circle at 38% 36%, #fffaf0, var(--moon) 45%, #cfc2a6 100%);
+    box-shadow: 0 0 60px 18px rgba(243, 234, 214, 0.14), 0 0 160px 60px rgba(243, 234, 214, 0.06);
+    opacity: 0.9;
+  }
+  .moon::after { /* a cloud drifting across */
+    content: ""; position: absolute; left: -40px; top: 52px; width: 170px; height: 26px; border-radius: 50%;
+    background: rgba(11, 7, 8, 0.75); filter: blur(8px);
+    animation: drift 38s linear infinite alternate;
+  }
+  @keyframes drift { from { transform: translateX(-30px); } to { transform: translateX(40px); } }
+
+  .wrap {
+    position: relative; z-index: 1;
+    width: 100%; max-width: 780px; margin: 0 auto;
+    padding: 28px 16px 40px;
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+  }
+
+  /* ---------- Masthead ---------- */
+  .masthead { text-align: center; padding-top: 36px; }
+  .eyebrow {
+    margin: 0; font-family: var(--caps); font-size: 0.72rem; letter-spacing: 0.32em;
+    text-transform: uppercase; color: var(--gold);
+  }
+  h1 {
+    margin: 6px 0 2px; font-family: var(--caps); font-weight: 700;
+    font-size: clamp(2.2rem, 7vw, 3.6rem); letter-spacing: 0.06em; line-height: 1.1;
+    color: var(--ink);
+    text-shadow: 0 2px 0 var(--blood-deep), 0 0 32px rgba(196, 49, 59, 0.35);
+  }
+  .tagline { margin: 0; font-style: italic; color: var(--ink-dim); font-size: 1.1rem; }
+  .castle { display: block; width: 100%; height: auto; margin-top: 18px; }
+  .castle .lit { fill: #f0b85a; animation: flicker 3.2s infinite steps(1); }
+  .castle .lit:nth-of-type(2) { animation-delay: 1.3s; }
+  @keyframes flicker { 0%, 100% { opacity: 1; } 42% { opacity: 0.55; } 47% { opacity: 1; } 73% { opacity: 0.75; } }
+
+  /* ---------- Panels ---------- */
+  .panel {
+    background: linear-gradient(180deg, var(--panel), var(--bg-raise));
+    border: 1px solid var(--panel-edge);
+    border-radius: var(--radius);
+    box-shadow: 0 30px 60px -30px #000, inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  }
+
+  /* Gate: download + on-device note */
+  .gate { padding: 22px 24px 20px; margin-top: -2px; position: relative; }
+  .gate::before { /* gold hairline at the top */
+    content: ""; position: absolute; left: 24px; right: 24px; top: -1px; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent); opacity: 0.6;
+  }
+  .gate h2 {
+    margin: 0 0 8px; font-family: var(--caps); font-size: 1rem; font-weight: 500;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold);
+  }
+  .gate p { margin: 0 0 14px; color: var(--ink); }
+  .gate .fine { margin: 12px 0 0; font-size: 0.88rem; color: var(--ink-dim); }
+  .gate .warn { color: #f0a46b; }
+
+  .gate-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; }
+
+  .btn {
+    appearance: none; cursor: pointer; border: 1px solid rgba(201, 164, 92, 0.55);
+    background: linear-gradient(180deg, #a5232c, var(--blood) 55%, #6a1217);
+    color: #fbf3e4; font-family: var(--caps); font-weight: 700; font-size: 0.9rem;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    padding: 12px 20px; border-radius: 10px; min-height: 46px;
+    box-shadow: 0 8px 24px -10px rgba(196, 49, 59, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+    transition: transform 0.15s ease, box-shadow 0.2s ease, filter 0.2s ease;
+  }
+  .btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 12px 28px -10px rgba(196, 49, 59, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.22); }
+  .btn:active:not(:disabled) { transform: translateY(0); }
+  .btn:disabled { cursor: not-allowed; filter: grayscale(0.7) brightness(0.6); }
+  .btn .size { font-weight: 500; letter-spacing: 0.04em; opacity: 0.8; margin-left: 6px; }
+
+  .btn-ghost {
+    appearance: none; cursor: pointer; background: transparent; color: var(--ink-dim);
+    border: 1px solid var(--panel-edge); border-radius: 8px; padding: 6px 12px; min-height: 34px;
+    font-family: var(--caps); font-size: 0.68rem; letter-spacing: 0.14em; text-transform: uppercase;
+  }
+  .btn-ghost:hover:not(:disabled) { color: var(--ink); border-color: var(--gold-dim); }
+  .btn-ghost:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  :focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+
+  /* Progress bar */
+  .progress { margin-top: 16px; }
+  .progress[hidden] { display: none; }
+  .track {
+    height: 12px; border-radius: 999px; overflow: hidden;
+    background: #0a0607; border: 1px solid var(--panel-edge);
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.8);
+  }
+  .fill {
+    height: 100%; width: 0%;
+    background: linear-gradient(90deg, var(--blood-deep), var(--blood) 40%, var(--blood-bright));
+    box-shadow: 0 0 12px rgba(196, 49, 59, 0.6);
+    border-radius: 999px; transition: width 0.25s ease-out; position: relative;
+  }
+  .fill::after { /* moving sheen while active */
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255, 220, 200, 0.28), transparent);
+    background-size: 60px 100%; background-repeat: no-repeat;
+    animation: sheen 1.6s linear infinite;
+  }
+  .progress.indeterminate .fill { width: 100% !important; opacity: 0.55; }
+  @keyframes sheen { from { background-position: -60px 0; } to { background-position: calc(100% + 60px) 0; } }
+  .progress-meta {
+    display: flex; justify-content: space-between; gap: 12px; margin-top: 8px;
+    font-family: var(--caps); font-size: 0.78rem; letter-spacing: 0.06em; color: var(--ink-dim); font-variant-numeric: tabular-nums;
+  }
+  .num { font-family: var(--caps); font-size: 0.86em; letter-spacing: 0.02em; }
+
+  /* ---------- Chamber (chat) ---------- */
+  .chamber { margin-top: 18px; display: flex; flex-direction: column; height: min(72dvh, 680px); min-height: 420px; overflow: hidden; }
+  .chamber-head {
+    display: flex; align-items: center; gap: 12px; padding: 14px 16px;
+    border-bottom: 1px solid var(--panel-edge);
+    background: linear-gradient(180deg, rgba(142, 27, 34, 0.12), transparent);
+  }
+  .seal {
+    flex: none; width: 40px; height: 40px; border-radius: 50%;
+    display: grid; place-items: center;
+    font-family: var(--caps); font-weight: 700; font-size: 1.15rem; color: #fbe9d0;
+    background: radial-gradient(circle at 35% 30%, #b8323b, var(--blood) 55%, var(--blood-deep));
+    box-shadow: 0 0 0 2px rgba(201, 164, 92, 0.45), 0 4px 14px rgba(0, 0, 0, 0.6);
+  }
+  .chamber-title { flex: 1; min-width: 0; }
+  .chamber-title h2 { margin: 0; font-family: var(--caps); font-size: 1rem; letter-spacing: 0.1em; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .presence { margin: 0; font-size: 0.85rem; color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .presence .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--ink-faint); margin-right: 6px; vertical-align: 1px; }
+  .presence.awake .dot { background: var(--blood-bright); box-shadow: 0 0 8px var(--blood-bright); }
+
+  .log {
+    list-style: none; margin: 0; padding: 18px 16px 8px;
+    flex: 1; overflow-y: auto; overscroll-behavior: contain;
+    display: flex; flex-direction: column; gap: 14px;
+    scrollbar-width: thin; scrollbar-color: var(--panel-edge) transparent;
+  }
+  .msg { max-width: 86%; padding: 10px 14px 12px; border-radius: var(--radius); overflow-wrap: anywhere; white-space: pre-wrap; }
+  .msg .who {
+    display: block; margin-bottom: 2px;
+    font-family: var(--caps); font-size: 0.64rem; letter-spacing: 0.2em; text-transform: uppercase;
+  }
+  .msg.count {
+    align-self: flex-start; border-top-left-radius: 3px;
+    background: linear-gradient(180deg, rgba(142, 27, 34, 0.2), rgba(142, 27, 34, 0.08));
+    border: 1px solid rgba(196, 49, 59, 0.3);
+    font-size: 1.08rem;
+  }
+  .msg.count .who { color: var(--gold); }
+  .msg.guest {
+    align-self: flex-end; border-top-right-radius: 3px;
+    background: rgba(234, 220, 196, 0.07); border: 1px solid rgba(234, 220, 196, 0.13);
+    color: #f3e9d8;
+  }
+  .msg.guest .who { color: var(--ink-dim); text-align: right; }
+  .msg.note {
+    align-self: center; max-width: 92%; text-align: center; font-style: italic;
+    color: var(--ink-dim); font-size: 0.95rem; padding: 2px 8px;
+  }
+  .msg.note.error { color: #f0a46b; font-style: normal; }
+  .msg.streaming .text::after {
+    content: ""; display: inline-block; width: 0.5em; height: 1em; margin-left: 2px; vertical-align: -0.12em;
+    background: var(--blood-bright); animation: blink 1s steps(1) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  .thinking { display: inline-flex; gap: 5px; padding: 6px 0 2px; }
+  .thinking i { width: 6px; height: 6px; border-radius: 50%; background: var(--gold); opacity: 0.25; animation: candle 1.2s infinite ease-in-out; }
+  .thinking i:nth-child(2) { animation-delay: 0.15s; }
+  .thinking i:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes candle { 0%, 100% { opacity: 0.2; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+
+  .composer {
+    display: flex; gap: 10px; align-items: flex-end;
+    padding: 12px 12px; border-top: 1px solid var(--panel-edge); background: rgba(0, 0, 0, 0.25);
+  }
+  .composer textarea {
+    flex: 1; min-width: 0; resize: none; max-height: 140px;
+    background: #0d0809; color: var(--ink); caret-color: var(--blood-bright);
+    border: 1px solid var(--panel-edge); border-radius: 10px;
+    padding: 11px 14px; font: inherit; font-size: 16px; line-height: 1.4;
+  }
+  .composer textarea::placeholder { color: var(--ink-faint); font-style: italic; }
+  .composer textarea:focus { outline: none; border-color: var(--gold-dim); box-shadow: 0 0 0 3px rgba(201, 164, 92, 0.12); }
+  .composer textarea:disabled { opacity: 0.6; }
+  .composer .btn { padding: 11px 18px; }
+  .memory-note { margin: 0; padding: 0 16px 12px; font-size: 0.8rem; color: var(--ink-faint); background: rgba(0, 0, 0, 0.25); }
+
+  footer { margin-top: 22px; text-align: center; font-size: 0.82rem; color: var(--ink-faint); }
+  footer a { color: var(--ink-dim); }
+
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+  @media (max-width: 560px) {
+    body { font-size: 16px; }
+    .masthead { padding-top: 64px; }
+    .moon { width: 64px; height: 64px; top: 22px; }
+    .gate { padding: 18px 16px; }
+    .msg { max-width: 92%; }
+    .chamber { height: min(76dvh, 680px); }
+    .composer .btn { padding: 11px 14px; }
+    .chamber-title h2 { font-size: 0.92rem; letter-spacing: 0.06em; }
+    .chamber-head { gap: 10px; padding: 12px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="sky" aria-hidden="true"><div class="moon"></div></div>
+
+<main class="wrap">
+  <header class="masthead">
+    <p class="eyebrow">Borgo Pass &middot; Transylvania</p>
+    <h1>Castle Dracula</h1>
+    <p class="tagline">An audience with the Count, by candlelight</p>
+    <svg class="castle" viewBox="0 0 600 70" preserveAspectRatio="xMidYMax meet" aria-hidden="true">
+      <path fill="#050304" d="M0 70 L0 60 Q60 52 110 54 L118 54 L118 30 L114 30 L131 6 L148 30 L144 30 L144 44 L156 44 L156 39 L163 39 L163 44 L172 44 L172 39 L179 39 L179 44 L188 44 L188 39 L195 39 L195 44 L204 44 L204 39 L211 39 L211 44 L222 44 L222 22 L216 22 L240 0 L264 22 L258 22 L258 44 L268 44 L268 16 L262 16 L284 -4 L306 16 L300 16 L300 40 L310 40 L310 35 L317 35 L317 40 L326 40 L326 35 L333 35 L333 40 L342 40 L342 35 L349 35 L349 40 L362 40 L362 28 L357 28 L372 10 L387 28 L382 28 L382 50 Q470 46 540 56 Q580 60 600 58 L600 70 Z"/>
+      <rect class="lit" x="236" y="28" width="5" height="8" rx="2"/>
+      <rect class="lit" x="281" y="22" width="5" height="9" rx="2"/>
+      <rect class="lit" x="129" y="36" width="4" height="6" rx="2" style="opacity:.7"/>
+    </svg>
+  </header>
+
+  <section class="gate panel" id="gate" aria-labelledby="gate-title">
+    <h2 id="gate-title">Before you cross the threshold</h2>
+    <p>The Count's voice comes from a small AI language model, <strong class="num" id="model-name">LFM2.5-350M</strong>. You download it <em>once</em>, about <strong class="num" id="size-label">300&nbsp;MB</strong>, and your browser keeps it. From then on it runs entirely on your own device: nothing you say leaves your computer, and later visits skip the download.</p>
+    <div class="gate-actions">
+      <button class="btn" id="download-btn" type="button" disabled>Checking your browser&hellip;</button>
+    </div>
+    <div class="progress" id="progress" hidden>
+      <div class="track" role="progressbar" aria-label="Model download" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="progress-track">
+        <div class="fill" id="progress-fill"></div>
+      </div>
+      <div class="progress-meta"><span id="progress-label">Starting&hellip;</span><span id="progress-pct"></span></div>
+    </div>
+    <p class="fine" id="backend-note">Uses your graphics card through WebGPU when the browser supports it, otherwise WebAssembly on the CPU.</p>
+  </section>
+
+  <section class="chamber panel" aria-label="Conversation with Count Dracula">
+    <div class="chamber-head">
+      <div class="seal" aria-hidden="true">D</div>
+      <div class="chamber-title">
+        <h2>Count Dracula</h2>
+        <p class="presence" id="presence"><span class="dot"></span><span id="presence-text">Asleep in the crypt</span></p>
+      </div>
+      <button class="btn-ghost" id="reset-btn" type="button" disabled>Begin anew</button>
+    </div>
+    <ol class="log" id="log" aria-live="polite" aria-relevant="additions"></ol>
+    <form class="composer" id="composer" autocomplete="off">
+      <label for="input" class="sr-only">Speak to the Count</label>
+      <textarea id="input" rows="1" maxlength="400" placeholder="Wake the Count first&hellip;" disabled enterkeyhint="send"></textarea>
+      <button class="btn" type="submit" id="send-btn" disabled>Speak</button>
+    </form>
+    <p class="memory-note">The Count's memory is short: he recalls only your last few exchanges.</p>
+  </section>
+
+  <footer>
+    Runs in your browser with <a href="https://github.com/huggingface/transformers.js" rel="noopener">Transformers.js</a>.
+    Count Dracula is from Bram Stoker's <cite>Dracula</cite> (1897).
+  </footer>
+</main>
+
+<!--
+  Inference runs in a Web Worker so the page stays responsive while the model thinks.
+  The worker source lives here (a non-executing script type) and is started from a Blob URL,
+  which keeps the whole app in this one HTML file.
+-->
+<script type="text/x-worker" id="worker-src">
+import {
+  pipeline,
+  env,
+  TextStreamer,
+  InterruptableStoppingCriteria,
+  ModelRegistry,
+} from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2/dist/transformers.min.js";
+
+env.allowLocalModels = false; // always fetch from the Hugging Face Hub (then the browser cache)
+// When the page is cross-origin isolated (see coi-sw.js), WebAssembly can run on several threads.
+// Up to 4 measured ~2.5x faster than 1 thread on a 4-core machine.
+if (self.crossOriginIsolated) env.backends.onnx.wasm.numThreads = Math.max(1, Math.min(4, navigator.hardwareConcurrency || 1));
+
+let config = null;
+let plan = null;        // { device, dtype } we intend to use
+let generator = null;
+const stopper = new InterruptableStoppingCriteria();
+const post = (msg) => self.postMessage(msg);
+const errorText = (err) => (err && err.message) || String(err);
+
+// Load options for one backend: { device, dtype, model_file_name? }.
+const optionsFor = (device) => {
+  const { dtype, model_file_name } = config.backends[device];
+  return model_file_name ? { device, dtype, model_file_name } : { device, dtype };
+};
+
+// Prefer WebGPU. (fp16 weights would also need the GPU's "shader-f16" feature.)
+async function chooseBackend() {
+  try {
+    const adapter = await navigator.gpu?.requestAdapter();
+    if (adapter && (!config.backends.webgpu.dtype.includes("f16") || adapter.features.has("shader-f16"))) {
+      return optionsFor("webgpu");
+    }
+  } catch (_) { /* no usable WebGPU */ }
+  return optionsFor("wasm");
+}
+
+async function init(cfg, device) {
+  config = cfg;
+  plan = device ? optionsFor(device) : await chooseBackend();
+  let cached = false;
+  try {
+    cached = await ModelRegistry.is_pipeline_cached("text-generation", config.model, plan);
+  } catch (_) { /* cache unavailable (e.g. insecure context) */ }
+  post({ type: "init", ...plan, cached });
+}
+
+// Bytes per file this load will fetch. Computed here because pipeline()'s own "progress_total"
+// ignores model_file_name (Transformers.js 4.3.2) and would count the full fp32 weights too.
+async function expectedFileSizes(opts) {
+  try {
+    const files = await ModelRegistry.get_pipeline_files("text-generation", config.model, opts);
+    const metas = await Promise.all(files.map((f) => ModelRegistry.get_file_metadata(config.model, f)));
+    const sizes = {};
+    files.forEach((f, i) => { if (metas[i].exists && metas[i].size) sizes[f] = metas[i].size; });
+    return sizes;
+  } catch (_) {
+    return {};
+  }
+}
+
+function progressReporter(sizes) {
+  const loaded = {};
+  const total = Object.values(sizes).reduce((a, b) => a + b, 0);
+  let last = 0;
+  return (p) => {
+    if (!total) { // no size info: fall back to the library's aggregate
+      if (p.status === "progress_total") post({ type: "progress", loaded: p.loaded, total: p.total });
+      return;
+    }
+    if (!(p.file in sizes)) return;
+    if (p.status === "progress") loaded[p.file] = p.loaded;
+    else if (p.status === "done") loaded[p.file] = sizes[p.file];
+    else return;
+    const now = performance.now();
+    if (p.status === "progress" && now - last < 80) return; // ~12 updates a second is plenty
+    last = now;
+    const sum = Object.keys(sizes).reduce((a, f) => a + Math.min(loaded[f] ?? 0, sizes[f]), 0);
+    post({ type: "progress", loaded: sum, total });
+  };
+}
+
+async function load() {
+  const attempts = [plan];
+  if (plan.device === "webgpu") attempts.push(optionsFor("wasm"));
+
+  for (let i = 0; i < attempts.length; i++) {
+    const attempt = attempts[i];
+    try {
+      post({ type: "loading", ...attempt });
+      const sizes = await expectedFileSizes(attempt);
+      generator = await pipeline("text-generation", config.model, {
+        ...attempt,
+        progress_callback: progressReporter(sizes),
+      });
+      // One-token warm-up compiles the GPU shaders now rather than on the first message.
+      post({ type: "warming", ...attempt });
+      await generator([{ role: "user", content: "Good evening." }], { max_new_tokens: 1, do_sample: false });
+      plan = attempt;
+      post({ type: "ready", ...attempt });
+      return;
+    } catch (err) {
+      console.error(err);
+      try { await generator?.dispose(); } catch (_) {}
+      generator = null;
+      if (i < attempts.length - 1) post({ type: "fallback", reason: errorText(err), ...attempts[i + 1] });
+      else post({ type: "error", stage: "load", message: errorText(err) });
+    }
+  }
+}
+
+function countTokens(messages) {
+  return generator.tokenizer.apply_chat_template(messages, {
+    add_generation_prompt: true,
+    return_dict: false,
+    return_tensor: false,
+    enable_thinking: false,
+  }).length;
+}
+
+// Keep the fixed prompt (character + opening exchange) and as many recent turns as fit the budget.
+function fitHistory(fixed, history) {
+  let kept = history.slice(-config.maxHistoryMessages);
+  while (kept.length && kept[0].role !== "user") kept = kept.slice(1);
+  while (kept.length > 1 && countTokens([...fixed, ...kept]) > config.maxPromptTokens) {
+    kept = kept.slice(2); // drop the oldest guest line and the Count's reply together
+  }
+  return kept;
+}
+
+async function generate({ fixed, history, reminder }) {
+  if (!generator) return post({ type: "error", stage: "generate", message: "The model is not loaded." });
+  const kept = fitHistory(fixed, history);
+  const prompt = [...fixed, ...kept];
+  // A short in-character nudge on the newest line keeps a small model from slipping into "assistant" mode.
+  // It is added to the prompt only, never to the stored history.
+  const last = prompt.at(-1);
+  if (reminder && last?.role === "user") prompt[prompt.length - 1] = { role: "user", content: `${last.content}\n\n(${reminder})` };
+  stopper.reset();
+  let tokens = 0;
+  let firstTokenAt = 0;
+  const streamer = new TextStreamer(generator.tokenizer, {
+    skip_prompt: true,
+    skip_special_tokens: true,
+    callback_function: (text) => post({ type: "token", text }),
+    token_callback_function: () => { if (tokens++ === 0) firstTokenAt = performance.now(); },
+  });
+  try {
+    await generator(prompt, {
+      ...config.generation,
+      streamer,
+      stopping_criteria: stopper,
+      tokenizer_encode_kwargs: { enable_thinking: false },
+    });
+    const seconds = (performance.now() - firstTokenAt) / 1000;
+    post({ type: "done", tokensPerSecond: tokens > 1 && seconds > 0 ? (tokens - 1) / seconds : 0, remembered: kept.length });
+  } catch (err) {
+    console.error(err);
+    post({ type: "error", stage: "generate", message: errorText(err) });
+  }
+}
+
+self.addEventListener("message", ({ data }) => {
+  if (data.type === "init") init(data.config, data.device);
+  else if (data.type === "load") load();
+  else if (data.type === "generate") generate(data);
+  else if (data.type === "interrupt") stopper.interrupt();
+});
+</script>
+
+<script type="module">
+/* ------------------------------------------------------------------
+   Model + character configuration
+   ------------------------------------------------------------------ */
+const CONFIG = {
+  model: "LiquidAI/LFM2.5-350M-ONNX",
+  modelName: "LFM2.5-350M",
+  // downloadMB = first-visit total: weights + tokenizer + configs.
+  backends: {
+    // 4-bit weights, including the packed 4-bit embedding table (GatherBlockQuantized).
+    webgpu: { dtype: "q4", downloadMB: 297 },
+    // The browser's WebAssembly runtime has no GatherBlockQuantized kernel, so no 4-bit file with
+    // packed embeddings loads there. The 4-bit file without them (model_q4f32, 485 MB) does load,
+    // but WASM's 4-bit matmuls are slow (~1 token/s vs ~5 for fp16 on one thread in testing), so the CPU path uses fp16.
+    wasm: { dtype: "fp16", downloadMB: 729 },
+  },
+  maxHistoryMessages: 8,   // at most the last 4 exchanges are sent to the model
+  maxPromptTokens: 1024,   // character prompt + history must fit in this many tokens
+  generation: {
+    max_new_tokens: 140,
+    do_sample: true,
+    temperature: 0.3,
+    top_p: 0.9,
+    repetition_penalty: 1.05,
+  },
+};
+
+// Tested against small models: naming words here ("vampire", "computers") makes them echo those words,
+// so the prompt describes the behaviour instead.
+const SYSTEM_PROMPT = `You are Count Dracula, a centuries-old Transylvanian nobleman. The year is 1893. A guest has come to your castle in the Carpathian mountains at night, and you are talking with them.
+How you speak: formal, old-fashioned, courtly English. You are gracious and charming, with a cold, menacing undertone. Speak in the first person as yourself.
+What you like to talk about: the night, the wolves you call "children of the night", your old castle, your proud boyar ancestors and their battles, your plans to travel to London.
+You hide your true nature. When the guest asks about food, garlic, mirrors, crosses or daylight, give a polite excuse and change the subject.
+If the guest speaks of strange new machines or inventions, you do not understand them; answer with puzzled disdain and stay in character.
+Reply in 2 to 4 sentences. Only speak; never describe your actions.`;
+
+// Appended to the newest guest line in the prompt only (see the worker).
+const REMINDER = "Reply as Count Dracula in 2 to 4 sentences, staying in character.";
+
+// The opening exchange is always kept in the prompt: it shows the model the voice to use.
+const OPENING_LINE = "Good evening. Is this the castle of Count Dracula?";
+const GREETING = "I am Dracula, and I bid you welcome to my house. Come freely, go safely, and leave something of the happiness you bring. The night is cold in these mountains; sit by the fire and tell me what brings you so far.";
+const FIXED_PROMPT = [
+  { role: "system", content: SYSTEM_PROMPT },
+  { role: "user", content: OPENING_LINE },
+  { role: "assistant", content: GREETING },
+];
+
+/* ------------------------------------------------------------------
+   UI wiring
+   ------------------------------------------------------------------ */
+const $ = (id) => document.getElementById(id);
+const gate = $("gate");
+const downloadBtn = $("download-btn");
+const progress = $("progress");
+const progressTrack = $("progress-track");
+const progressFill = $("progress-fill");
+const progressLabel = $("progress-label");
+const progressPct = $("progress-pct");
+const backendNote = $("backend-note");
+const presence = $("presence");
+const presenceText = $("presence-text");
+const log = $("log");
+const form = $("composer");
+const input = $("input");
+const sendBtn = $("send-btn");
+const resetBtn = $("reset-btn");
+
+$("model-name").textContent = CONFIG.modelName;
+
+const BACKEND_LABEL = { webgpu: "WebGPU", wasm: "WebAssembly (CPU)" };
+const mb = (bytes) => (bytes / 1e6).toFixed(bytes < 1e7 ? 1 : 0);
+
+let history = [];          // alternating {role:"user"} / {role:"assistant"} turns after the opening
+let state = "checking";    // checking | idle | loading | ready | generating | reviving | error
+let plan = null;
+let current = null;        // the Count's bubble currently being written
+
+/* ---- Chat log helpers ---- */
+function scrollToEnd() { log.scrollTop = log.scrollHeight; }
+
+function addNote(text, cls = "") {
+  const li = document.createElement("li");
+  li.className = `msg note ${cls}`.trim();
+  li.textContent = text;
+  log.append(li);
+  scrollToEnd();
+  return li;
+}
+
+function addMessage(role, text) {
+  const li = document.createElement("li");
+  li.className = `msg ${role === "user" ? "guest" : "count"}`;
+  const who = document.createElement("span");
+  who.className = "who";
+  who.textContent = role === "user" ? "You" : "Dracula";
+  const body = document.createElement("span");
+  body.className = "text";
+  body.textContent = text;
+  li.append(who, body);
+  log.append(li);
+  scrollToEnd();
+  return li;
+}
+
+function openScene() {
+  log.replaceChildren();
+  addNote("You knock at the great door. Somewhere below, the wolves begin to howl.");
+  addMessage("assistant", GREETING);
+}
+
+/* ---- Clean up small-model habits before the reply joins the history ---- */
+function tidy(text) {
+  let t = text.replace(/<think>[\s\S]*?<\/think>/g, "");
+  t = t.replace(/^\s*(?:\*\*)?(?:count\s+)?dracula(?:\*\*)?\s*:\s*/i, "");   // "Dracula:" speaker labels
+  t = t.replace(/^\s*(?:\*[a-z][^*\n]{0,80}\*|\([^)\n]{1,80}\))\s*/, "");   // leading *smiles coldly* / (stage directions)
+  t = t.replace(/\*\*([^*\n]+)\*\*/g, "$1").replace(/\n{3,}/g, "\n\n").trim();
+  // If the reply was cut off mid-sentence, end it at the last full sentence.
+  if (t && !/[.!?…"”’)]$/.test(t)) {
+    const cut = Math.max(t.lastIndexOf(". "), t.lastIndexOf("! "), t.lastIndexOf("? "), t.lastIndexOf("… "));
+    if (cut > t.length * 0.35) t = t.slice(0, cut + 1);
+    else t += "…";
+  }
+  return t;
+}
+
+// Show *emphasis* as italics; everything else stays plain text (no HTML from the model).
+function renderText(el, text) {
+  el.replaceChildren();
+  for (const part of text.split(/(\*[^*\n]+\*)/)) {
+    if (/^\*[^*\n]+\*$/.test(part)) el.append(Object.assign(document.createElement("em"), { textContent: part.slice(1, -1) }));
+    else if (part) el.append(part);
+  }
+}
+
+/* ---- Composer state ---- */
+function setComposer() {
+  const ready = state === "ready";
+  const busy = state === "generating";
+  input.disabled = !(ready || busy);
+  input.placeholder = ready || busy ? "Speak to the Count…" : reviving() ? "The Count is gathering himself…" : "Wake the Count first…";
+  sendBtn.disabled = !(busy || (ready && input.value.trim()));
+  sendBtn.textContent = busy ? "Silence" : "Speak";
+  resetBtn.disabled = !(ready && history.length);
+}
+
+function setPresence(text, awake = false) {
+  presenceText.textContent = text;
+  presence.classList.toggle("awake", awake);
+}
+
+function setProgress(fraction, label, pctText = "") {
+  progress.hidden = false;
+  progress.classList.toggle("indeterminate", fraction == null);
+  const pct = fraction == null ? 0 : Math.max(0, Math.min(100, fraction * 100));
+  progressFill.style.width = `${pct}%`;
+  progressTrack.setAttribute("aria-valuenow", String(Math.round(pct)));
+  progressLabel.textContent = label;
+  progressPct.textContent = pctText;
+}
+
+function sizeFor(device) {
+  return CONFIG.backends[device].downloadMB;
+}
+
+/* ---- Gate: what will be downloaded, and where it will run ---- */
+async function showGate(data) {
+  // On the CPU path, turn on multi-threading first. This may reload the page once.
+  if (data.device === "wasm" && (await enableIsolation({ reload: true }))) return;
+
+  state = "idle";
+  const size = sizeFor(data.device);
+  $("size-label").textContent = `${size} MB`;
+  backendNote.textContent = data.device === "webgpu"
+    ? "Your browser supports WebGPU, so the Count will think on your graphics card."
+    : "WebGPU isn't available here, so the model will run on your CPU with WebAssembly. Replies will be slower.";
+  if (data.cached) {
+    downloadBtn.innerHTML = `Wake the Count <span class="size">(already downloaded)</span>`;
+  } else {
+    downloadBtn.innerHTML = `Download model <span class="size">(${size} MB)</span>`;
+    // All of a user's GitHub Pages sites share one origin, and so one storage quota.
+    const free = await freeStorageMB();
+    if (free != null && free < size * 1.1) {
+      backendNote.append(Object.assign(document.createElement("span"), {
+        className: "warn",
+        textContent: ` Your browser reports only about ${Math.floor(free)} MB of storage free for this site, so it may not be able to keep the model between visits.`,
+      }));
+    }
+  }
+  if (!window.isSecureContext) {
+    backendNote.innerHTML += ` <span class="warn">This page isn't on https:// or localhost, so the browser can't keep the model between visits.</span>`;
+  }
+  downloadBtn.disabled = false;
+}
+
+async function freeStorageMB() {
+  try {
+    const { quota, usage } = await navigator.storage.estimate();
+    return quota ? (quota - (usage || 0)) / 1e6 : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+/* ---- Multi-threaded WebAssembly on GitHub Pages ---- */
+// Threads need a cross-origin isolated page, which needs COOP/COEP response headers that GitHub
+// Pages can't send. coi-sw.js adds them, but only from the next page load, so the first CPU-path
+// visit reloads once. Returns true if a reload is under way.
+const ISOLATION_RELOAD_KEY = "castle-dracula:isolation-reload";
+async function enableIsolation({ reload }) {
+  if (window.crossOriginIsolated || !window.isSecureContext || !("serviceWorker" in navigator)) return false;
+  try {
+    await navigator.serviceWorker.register("coi-sw.js");
+    if (!reload) return false;
+    // Reload at most once per tab session: if that didn't isolate the page, this browser can't be.
+    try {
+      if (sessionStorage.getItem(ISOLATION_RELOAD_KEY)) return false;
+      sessionStorage.setItem(ISOLATION_RELOAD_KEY, "1");
+    } catch (_) {
+      return false; // no way to remember the attempt, so don't risk a reload loop
+    }
+    if (!navigator.serviceWorker.controller) {
+      await new Promise((resolve) => {
+        navigator.serviceWorker.addEventListener("controllerchange", resolve, { once: true });
+        setTimeout(resolve, 4000);
+      });
+    }
+    if (!navigator.serviceWorker.controller) return false;
+    downloadBtn.textContent = "Preparing…";
+    location.reload();
+    return true;
+  } catch (err) {
+    console.warn("Couldn't enable cross-origin isolation; WebAssembly will run on one thread.", err);
+    return false;
+  }
+}
+
+/* ---- Worker ---- */
+const workerUrl = URL.createObjectURL(new Blob([$("worker-src").textContent], { type: "text/javascript" }));
+let worker = null;
+let hardStopTimer = null;  // see silence()
+let lastTokenAt = 0;       // for the gap between streamed tokens
+let tokenGap = 0;
+const reviving = () => state === "reviving";
+
+function startWorker(device) {
+  worker = new Worker(workerUrl, { type: "module" });
+  worker.addEventListener("error", (e) => {
+    console.error(e);
+    fail("Could not start the model runtime. Check your connection to cdn.jsdelivr.net and try reloading.");
+  });
+  worker.addEventListener("message", onWorkerMessage);
+  worker.postMessage({ type: "init", config: CONFIG, device });
+}
+
+function onWorkerMessage({ data }) {
+  switch (data.type) {
+    case "init":
+      plan = data;
+      if (reviving()) { worker.postMessage({ type: "load" }); break; } // model is cached: load straight away
+      showGate(data);
+      break;
+    case "loading":
+      if (reviving()) break;
+      setProgress(0, `Fetching ${CONFIG.modelName} for ${BACKEND_LABEL[data.device]}…`);
+      setPresence("Stirring in the crypt…");
+      break;
+    case "progress": {
+      if (reviving()) break;
+      const fraction = data.total ? data.loaded / data.total : 0;
+      setProgress(fraction, `${mb(data.loaded)} of ${mb(data.total)} MB`, `${Math.floor(fraction * 100)}%`);
+      break;
+    }
+    case "fallback":
+      console.warn("WebGPU failed, falling back to WASM:", data.reason);
+      enableIsolation({ reload: false }); // threads for the CPU path from the next visit on
+      if (reviving()) break;
+      backendNote.textContent = "WebGPU didn't work on this device, so the model is switching to WebAssembly on the CPU.";
+      setProgress(0, `Switching to WebAssembly (${sizeFor("wasm")} MB)…`);
+      break;
+    case "warming":
+      if (reviving()) break;
+      setProgress(null, `Preparing the model on ${BACKEND_LABEL[data.device]}…`, "");
+      setPresence("Rising from his coffin…");
+      break;
+    case "ready": {
+      const wasReviving = reviving();
+      plan = data;
+      state = "ready";
+      gate.hidden = true;
+      setPresence(`Awake · on your device via ${BACKEND_LABEL[data.device]}`, true);
+      if (!wasReviving) addNote("The Count is listening.");
+      setComposer();
+      input.focus({ preventScroll: true });
+      break;
+    }
+    case "token":
+      if (current) {
+        const now = performance.now();
+        if (lastTokenAt) tokenGap = now - lastTokenAt;
+        lastTokenAt = now;
+        current.querySelector(".thinking")?.remove();
+        current.querySelector(".text").textContent += data.text;
+        scrollToEnd();
+      }
+      break;
+    case "done":
+      clearTimeout(hardStopTimer);
+      finishReply(data);
+      break;
+    case "error":
+      if (data.stage === "generate") {
+        clearTimeout(hardStopTimer);
+        finishReply(null);
+        addNote(`The Count fell silent (${data.message}).`, "error");
+      } else {
+        fail(`The model could not be loaded: ${data.message}`);
+      }
+      break;
+  }
+}
+
+startWorker();
+
+function fail(message) {
+  state = "error";
+  gate.hidden = false;
+  progress.hidden = true;
+  backendNote.innerHTML = "";
+  backendNote.append(Object.assign(document.createElement("span"), { className: "warn", textContent: message }));
+  downloadBtn.disabled = false;
+  downloadBtn.textContent = "Try again";
+  setPresence("Asleep in the crypt");
+  setComposer();
+}
+
+/* ---- Actions ---- */
+downloadBtn.addEventListener("click", () => {
+  if (state === "error") { location.reload(); return; }
+  // Ask the browser not to evict the model under storage pressure. (Firefox may show a prompt.)
+  navigator.storage?.persist?.().catch(() => {});
+  state = "loading";
+  downloadBtn.disabled = true;
+  downloadBtn.textContent = "Summoning…";
+  setProgress(0, "Starting…");
+  worker.postMessage({ type: "load" });
+});
+
+function send() {
+  const text = input.value.trim().slice(0, 400);
+  if (!text || state !== "ready") return;
+  input.value = "";
+  autosize();
+  addMessage("user", text);
+  history.push({ role: "user", content: text });
+
+  current = addMessage("assistant", "");
+  current.classList.add("streaming");
+  const dots = document.createElement("span");
+  dots.className = "thinking";
+  dots.setAttribute("aria-label", "The Count is considering");
+  dots.innerHTML = "<i></i><i></i><i></i>";
+  current.append(dots);
+
+  state = "generating";
+  lastTokenAt = 0;
+  tokenGap = 0;
+  setComposer();
+  setPresence("Considering your words…", true);
+  worker.postMessage({ type: "generate", fixed: FIXED_PROMPT, history, reminder: REMINDER });
+}
+
+function finishReply(stats) {
+  if (!current) return;
+  const raw = current.querySelector(".text").textContent;
+  const reply = tidy(raw);
+  current.classList.remove("streaming");
+  current.querySelector(".thinking")?.remove();
+  if (reply) {
+    renderText(current.querySelector(".text"), reply);
+    history.push({ role: "assistant", content: reply });
+  } else {
+    // Nothing said (e.g. silenced at once): drop the unanswered line so turns stay paired.
+    current.remove();
+    history.pop();
+  }
+  // Only short history is ever sent; trim the stored copy too.
+  if (history.length > CONFIG.maxHistoryMessages) history = history.slice(-CONFIG.maxHistoryMessages);
+  current = null;
+  hardStopTimer = null;
+  state = "ready";
+  const tps = stats?.tokensPerSecond;
+  const speed = tps ? ` · ${tps < 10 ? tps.toFixed(1) : tps.toFixed(0)} tokens/s` : "";
+  setPresence(`Awake · on your device via ${BACKEND_LABEL[plan.device]}${speed}`, true);
+  setComposer();
+  input.focus({ preventScroll: true });
+}
+
+// "Silence": ask the worker to stop after the current token. On WebGPU that lands within a token.
+// On the CPU (WASM) path inference never yields to the worker's message queue, so if the reply hasn't
+// stopped shortly, keep what was said, stop the worker and reload the model from the browser cache.
+function silence() {
+  if (state !== "generating" || hardStopTimer) return;
+  worker.postMessage({ type: "interrupt" });
+  sendBtn.disabled = true;
+  const grace = plan.device === "webgpu" ? Math.min(15000, Math.max(1500, 3 * tokenGap)) : 1500;
+  hardStopTimer = setTimeout(() => {
+    worker.terminate();
+    finishReply(null);
+    state = "reviving";
+    setComposer();
+    setPresence("Gathering himself…", true);
+    startWorker(plan.device);
+  }, grace);
+}
+
+form.addEventListener("submit", (e) => {
+  e.preventDefault();
+  if (state === "generating") silence();
+  else send();
+});
+
+input.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+    e.preventDefault();
+    if (state === "ready") send();
+  }
+});
+
+function autosize() {
+  input.style.height = "auto";
+  input.style.height = `${Math.min(input.scrollHeight, 140)}px`;
+}
+input.addEventListener("input", () => { autosize(); setComposer(); });
+
+resetBtn.addEventListener("click", () => {
+  if (state !== "ready") return;
+  history = [];
+  openScene();
+  addNote("The Count is listening.");
+  setComposer();
+  input.focus();
+});
+
+openScene();
+setComposer();
+</script>
+</body>
+</html>
