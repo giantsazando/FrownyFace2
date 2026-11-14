@@ -7,9 +7,21 @@
 <meta name="description" content="Converse with Count Dracula, voiced by a small language model that runs entirely in your browser.">
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#0b0708">
-<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='29' fill='%238e1b22' stroke='%23c9a45c' stroke-width='4'/%3E%3Ctext x='32' y='44' font-family='Georgia,serif' font-size='33' font-weight='700' text-anchor='middle' fill='%23f3e9d8'%3ED%3C/text%3E%3C/svg%3E">
+<!-- Link previews. og:url / og:image assume the default GitHub Pages address; change them if you use a custom domain. -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="Castle Dracula">
+<meta property="og:description" content="Talk with Count Dracula. A small AI model voices him, running entirely in your browser.">
+<meta property="og:url" content="https://giantsazando.github.io/FrownyFace2/">
+<meta property="og:image" content="https://giantsazando.github.io/FrownyFace2/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Castle Dracula: a moonlit castle silhouette above a chat window with Count Dracula.">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=IM+Fell+English:ital@0;1&display=swap" rel="stylesheet">
+<!-- crossorigin: when the page is cross-origin isolated (see coi-sw.js), cross-origin styles must load with CORS. -->
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=IM+Fell+English:ital@0;1&display=swap" rel="stylesheet" crossorigin="anonymous">
 <style>
   :root {
     --bg: #0b0708;
@@ -331,6 +343,9 @@ import {
 } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2/dist/transformers.min.js";
 
 env.allowLocalModels = false; // always fetch from the Hugging Face Hub (then the browser cache)
+// When the page is cross-origin isolated (see coi-sw.js), WebAssembly can run on several threads.
+// Up to 4 measured ~2.5x faster than 1 thread on a 4-core machine.
+if (self.crossOriginIsolated) env.backends.onnx.wasm.numThreads = Math.max(1, Math.min(4, navigator.hardwareConcurrency || 1));
 
 let config = null;
 let plan = null;        // { device, dtype } we intend to use
@@ -502,7 +517,7 @@ const CONFIG = {
     webgpu: { dtype: "q4", downloadMB: 297 },
     // The browser's WebAssembly runtime has no GatherBlockQuantized kernel, so no 4-bit file with
     // packed embeddings loads there. The 4-bit file without them (model_q4f32, 485 MB) does load,
-    // but WASM's 4-bit matmuls are slow (~1 token/s in testing), so the CPU path uses fp16 (~5 tokens/s).
+    // but WASM's 4-bit matmuls are slow (~1 token/s vs ~5 for fp16 on one thread in testing), so the CPU path uses fp16.
     wasm: { dtype: "fp16", downloadMB: 729 },
   },
   maxHistoryMessages: 8,   // at most the last 4 exchanges are sent to the model
@@ -654,6 +669,78 @@ function sizeFor(device) {
   return CONFIG.backends[device].downloadMB;
 }
 
+/* ---- Gate: what will be downloaded, and where it will run ---- */
+async function showGate(data) {
+  // On the CPU path, turn on multi-threading first. This may reload the page once.
+  if (data.device === "wasm" && (await enableIsolation({ reload: true }))) return;
+
+  state = "idle";
+  const size = sizeFor(data.device);
+  $("size-label").textContent = `${size} MB`;
+  backendNote.textContent = data.device === "webgpu"
+    ? "Your browser supports WebGPU, so the Count will think on your graphics card."
+    : "WebGPU isn't available here, so the model will run on your CPU with WebAssembly. Replies will be slower.";
+  if (data.cached) {
+    downloadBtn.innerHTML = `Wake the Count <span class="size">(already downloaded)</span>`;
+  } else {
+    downloadBtn.innerHTML = `Download model <span class="size">(${size} MB)</span>`;
+    // All of a user's GitHub Pages sites share one origin, and so one storage quota.
+    const free = await freeStorageMB();
+    if (free != null && free < size * 1.1) {
+      backendNote.append(Object.assign(document.createElement("span"), {
+        className: "warn",
+        textContent: ` Your browser reports only about ${Math.floor(free)} MB of storage free for this site, so it may not be able to keep the model between visits.`,
+      }));
+    }
+  }
+  if (!window.isSecureContext) {
+    backendNote.innerHTML += ` <span class="warn">This page isn't on https:// or localhost, so the browser can't keep the model between visits.</span>`;
+  }
+  downloadBtn.disabled = false;
+}
+
+async function freeStorageMB() {
+  try {
+    const { quota, usage } = await navigator.storage.estimate();
+    return quota ? (quota - (usage || 0)) / 1e6 : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+/* ---- Multi-threaded WebAssembly on GitHub Pages ---- */
+// Threads need a cross-origin isolated page, which needs COOP/COEP response headers that GitHub
+// Pages can't send. coi-sw.js adds them, but only from the next page load, so the first CPU-path
+// visit reloads once. Returns true if a reload is under way.
+const ISOLATION_RELOAD_KEY = "castle-dracula:isolation-reload";
+async function enableIsolation({ reload }) {
+  if (window.crossOriginIsolated || !window.isSecureContext || !("serviceWorker" in navigator)) return false;
+  try {
+    await navigator.serviceWorker.register("coi-sw.js");
+    if (!reload) return false;
+    // Reload at most once per tab session: if that didn't isolate the page, this browser can't be.
+    try {
+      if (sessionStorage.getItem(ISOLATION_RELOAD_KEY)) return false;
+      sessionStorage.setItem(ISOLATION_RELOAD_KEY, "1");
+    } catch (_) {
+      return false; // no way to remember the attempt, so don't risk a reload loop
+    }
+    if (!navigator.serviceWorker.controller) {
+      await new Promise((resolve) => {
+        navigator.serviceWorker.addEventListener("controllerchange", resolve, { once: true });
+        setTimeout(resolve, 4000);
+      });
+    }
+    if (!navigator.serviceWorker.controller) return false;
+    downloadBtn.textContent = "Preparing…";
+    location.reload();
+    return true;
+  } catch (err) {
+    console.warn("Couldn't enable cross-origin isolation; WebAssembly will run on one thread.", err);
+    return false;
+  }
+}
+
 /* ---- Worker ---- */
 const workerUrl = URL.createObjectURL(new Blob([$("worker-src").textContent], { type: "text/javascript" }));
 let worker = null;
@@ -674,26 +761,11 @@ function startWorker(device) {
 
 function onWorkerMessage({ data }) {
   switch (data.type) {
-    case "init": {
+    case "init":
       plan = data;
       if (reviving()) { worker.postMessage({ type: "load" }); break; } // model is cached: load straight away
-      state = "idle";
-      const size = sizeFor(data.device);
-      $("size-label").textContent = `${size} MB`;
-      backendNote.textContent = data.device === "webgpu"
-        ? "Your browser supports WebGPU, so the Count will think on your graphics card."
-        : "WebGPU isn't available here, so the model will run on your CPU with WebAssembly. Replies will be slower.";
-      if (data.cached) {
-        downloadBtn.innerHTML = `Wake the Count <span class="size">(already downloaded)</span>`;
-      } else {
-        downloadBtn.innerHTML = `Download model <span class="size">(${size} MB)</span>`;
-      }
-      if (!window.isSecureContext) {
-        backendNote.innerHTML += ` <span class="warn">This page isn't on https:// or localhost, so the browser can't keep the model between visits.</span>`;
-      }
-      downloadBtn.disabled = false;
+      showGate(data);
       break;
-    }
     case "loading":
       if (reviving()) break;
       setProgress(0, `Fetching ${CONFIG.modelName} for ${BACKEND_LABEL[data.device]}…`);
@@ -707,6 +779,7 @@ function onWorkerMessage({ data }) {
     }
     case "fallback":
       console.warn("WebGPU failed, falling back to WASM:", data.reason);
+      enableIsolation({ reload: false }); // threads for the CPU path from the next visit on
       if (reviving()) break;
       backendNote.textContent = "WebGPU didn't work on this device, so the model is switching to WebAssembly on the CPU.";
       setProgress(0, `Switching to WebAssembly (${sizeFor("wasm")} MB)…`);
@@ -770,6 +843,8 @@ function fail(message) {
 /* ---- Actions ---- */
 downloadBtn.addEventListener("click", () => {
   if (state === "error") { location.reload(); return; }
+  // Ask the browser not to evict the model under storage pressure. (Firefox may show a prompt.)
+  navigator.storage?.persist?.().catch(() => {});
   state = "loading";
   downloadBtn.disabled = true;
   downloadBtn.textContent = "Summoning…";
